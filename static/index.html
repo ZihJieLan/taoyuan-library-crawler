@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>桃園市立圖書館 ‧ 在館書目智慧檢索系統 (0919B)</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-background">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Compact Top Navbar & Stats Bar (紅框區域緊湊化) -->
+        <header class="navbar-compact">
+            <div class="brand-compact">
+                <div class="brand-icon-compact">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                        <path d="m14.5 12.5 3 3"></path>
+                    </svg>
+                </div>
+                <div class="brand-text-compact">
+                    <h1>桃園圖書館 ‧ 在館書目智慧檢索系統</h1>
+                    <span class="subtext-compact">WebPAC Smart Holdings Crawler v0919B</span>
+                </div>
+            </div>
+
+            <!-- 緊湊型統計資訊條 (Compact Stats Strip) -->
+            <div class="stats-strip-compact">
+                <div class="stat-pill available" data-filter="TARGET_AVAILABLE" title="點擊切換至在館可借">
+                    <span class="stat-pill-icon">🌟</span>
+                    <span class="stat-pill-label">在館可借</span>
+                    <span class="stat-pill-val" id="countAvailable">0</span>
+                </div>
+                <div class="stat-pill borrowed" data-filter="TARGET_BORROWED" title="點擊切換至已外借">
+                    <span class="stat-pill-icon">⏳</span>
+                    <span class="stat-pill-label">已外借</span>
+                    <span class="stat-pill-val" id="countBorrowed">0</span>
+                </div>
+                <div class="stat-pill other" data-filter="OTHER_BRANCHES" title="點擊切換至他館有書">
+                    <span class="stat-pill-icon">📍</span>
+                    <span class="stat-pill-label">他館有書</span>
+                    <span class="stat-pill-val" id="countOther">0</span>
+                </div>
+                <div class="stat-pill notfound" data-filter="NOT_FOUND" title="點擊切換至查無此書">
+                    <span class="stat-pill-icon">❓</span>
+                    <span class="stat-pill-label">查無此書</span>
+                    <span class="stat-pill-val" id="countNotFound">0</span>
+                </div>
+            </div>
+
+            <!-- 右側控制項：分館選擇與狀態 -->
+            <div class="nav-controls-compact">
+                <div class="branch-selector-pill">
+                    <span class="pill-label">目標分館</span>
+                    <div class="pill-select-wrapper">
+                        <select id="targetBranch">
+                            <option value="中壢分館" selected>中壢分館 (預設)</option>
+                            <option value="新總館">新總館 (總館)</option>
+                            <option value="青埔智慧科技分館">青埔智慧科技分館</option>
+                            <option value="龍岡分館">龍岡分館</option>
+                            <option value="自強分館">自強分館</option>
+                            <option value="平鎮分館">平鎮分館</option>
+                            <option value="八德分館">八德分館</option>
+                            <option value="大園分館">大園分館</option>
+                            <option value="大溪分館">大溪分館</option>
+                            <option value="蘆竹分館">蘆竹分館</option>
+                            <option value="龜山分館">龜山分館</option>
+                            <option value="龍潭分館">龍潭分館</option>
+                            <option value="楊梅分館">楊梅分館</option>
+                            <option value="中路分館">中路分館</option>
+                            <option value="埔子分館">埔子分館</option>
+                            <option value="大崗分館">大崗分館</option>
+                            <option value="大林分館">大林分館</option>
+                            <option value="大湳分館">大湳分館</option>
+                            <option value="大竹分館">大竹分館</option>
+                            <option value="富岡分館">富岡分館</option>
+                            <option value="山仔頂分館">山仔頂分館</option>
+                            <option value="山德分館">山德分館</option>
+                            <option value="山腳分館">山腳分館</option>
+                            <option value="康莊分館">康莊分館</option>
+                            <option value="文化局分館">文化局分館</option>
+                            <option value="新坡分館">新坡分館</option>
+                            <option value="景雲分館">景雲分館</option>
+                            <option value="會稽分館">會稽分館</option>
+                            <option value="東勢分館">東勢分館</option>
+                            <option value="紅梅分館">紅梅分館</option>
+                            <option value="義民分館">義民分館</option>
+                            <option value="草漯分館">草漯分館</option>
+                            <option value="迴龍分館">迴龍分館</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="system-status-pill" id="systemStatusPill">
+                    <span class="status-dot"></span>
+                    <span class="status-text" id="statusText">系統待命中</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workspace Grid (綠框主體核心區域) -->
+        <main class="dashboard-grid-focus">
+            <!-- Left: Book List & Control (綠框左側) -->
+            <section class="control-panel-focus glass-card">
+                <div class="card-header-compact">
+                    <div class="header-title">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <h2>待檢索書單</h2>
+                    </div>
+                    <div class="header-right-tools">
+                        <span class="book-badge" id="bookCountBadge">61 本</span>
+                        <button type="button" class="btn-tool" id="btnReloadDefault" title="重載預設書單">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M3 21v-5h5"></path></svg>
+                            預設
+                        </button>
+                        <button type="button" class="btn-tool" id="btnClearList" title="清空書單">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            清空
+                        </button>
+                    </div>
+                </div>
+
+                <div class="textarea-wrapper-focus">
+                    <textarea id="bookListInput" placeholder="請在此貼上書單，每行一本書名...（支援自動過濾頁碼如 p.120、88 等）" spellcheck="false"></textarea>
+                </div>
+
+                <div class="action-buttons-focus">
+                    <button type="button" class="btn-primary" id="btnStartCrawl">
+                        <div class="btn-glow"></div>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        <span>開始自動檢索</span>
+                    </button>
+                    <button type="button" class="btn-danger" id="btnStopCrawl" disabled>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+                        <span>停止</span>
+                    </button>
+                </div>
+
+                <!-- Compact Live Progress Section -->
+                <div class="progress-section-compact">
+                    <div class="progress-header-compact">
+                        <div class="task-info-compact">
+                            <span class="pulsing-radar-small"></span>
+                            <span class="task-book-compact" id="currentBookLabel">尚未開始</span>
+                        </div>
+                        <span class="percent-label-compact" id="percentLabel">0%</span>
+                    </div>
+                    <div class="progress-bar-track-compact">
+                        <div class="progress-bar-fill-compact" id="progressBarFill"></div>
+                    </div>
+                    <!-- Live Output Log -->
+                    <div class="terminal-body-compact" id="logTerminal">
+                        <div class="log-entry system">系統已就緒，請點擊「開始自動檢索」進行館藏比對。</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right: Results Table (綠框右側與黃框分頁) -->
+            <section class="results-panel-focus glass-card">
+                <!-- Toolbar: 黃框分頁切換 (🌟在館可借排最左且預設，全部書目排最右) -->
+                <div class="table-toolbar-focus">
+                    <div class="tabs-group" id="filterTabs">
+                        <!-- 1. 最左側：🌟 在館可借 (預設選中) -->
+                        <button type="button" class="tab-btn tab-available active" data-tab="TARGET_AVAILABLE">
+                            🌟 在館可借 (<span id="tabCountAvailable">0</span>)
+                        </button>
+                        <!-- 2. ⏳ 已外借 -->
+                        <button type="button" class="tab-btn tab-borrowed" data-tab="TARGET_BORROWED">
+                            ⏳ 已外借 (<span id="tabCountBorrowed">0</span>)
+                        </button>
+                        <!-- 3. 📍 他館有書 -->
+                        <button type="button" class="tab-btn tab-other" data-tab="OTHER_BRANCHES">
+                            📍 他館有書 (<span id="tabCountOther">0</span>)
+                        </button>
+                        <!-- 4. ❓ 查無此書 -->
+                        <button type="button" class="tab-btn tab-notfound" data-tab="NOT_FOUND">
+                            ❓ 查無此書 (<span id="tabCountNotFound">0</span>)
+                        </button>
+                        <!-- 5. 最右側：全部書目 -->
+                        <button type="button" class="tab-btn" data-tab="ALL">
+                            全部書目 (<span id="tabCountAll">0</span>)
+                        </button>
+                    </div>
+
+                    <div class="toolbar-actions-compact">
+                        <div class="search-box-compact">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <input type="text" id="tableFilterInput" placeholder="搜尋結果表格...">
+                        </div>
+
+                        <button type="button" class="btn-secondary-compact" id="btnCopyAvailable">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            複製在館書單
+                        </button>
+
+                        <a href="/api/export_csv" class="btn-secondary-compact" id="btnExportCsv" download>
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            匯出 CSV
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Table Container (高度最大化) -->
+                <div class="table-responsive-focus">
+                    <table class="data-table" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th width="50">序號</th>
+                                <th>原始書目 / 檢索結果</th>
+                                <th width="120">分館狀態</th>
+                                <th width="140">索書號</th>
+                                <th width="130">館藏地/室</th>
+                                <th width="170">狀態詳情 / 到期日</th>
+                                <th width="110">條碼號</th>
+                                <th width="75">連結</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr class="empty-row">
+                                <td colspan="8">
+                                    <div class="empty-placeholder">
+                                        <div class="empty-icon">📚</div>
+                                        <p>尚未開始檢索，請在左側確認書單後點擊「開始自動檢索」</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
