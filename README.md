@@ -5,7 +5,28 @@
 ![Playwright](https://img.shields.io/badge/Playwright-Automated%20Browser-45ba4b.svg)
 ![License](https://img.shields.io/badge/License-MIT-orange.svg)
 
-專為**桃園市立圖書館（TYPL）**讀者設計的高效館藏檢索系統。解決官方 WebPAC 系統無法批次查書、多分館館藏狀態分散、標點符號查詢易失效等痛點。
+A lightweight batch book-availability checker built for the Taoyuan Public Library system, developed with Google Antigravity.
+
+Why this project?
+I usually keep a reading list of books I want to check out. Whenever I visit local library branches (such as Dayuan, Dazhu, Zhongli, Zhonglu, Guishan, etc.), I want to know which books on my list are currently available on the shelf.
+
+However, the official library catalog only allows searching one title at a time. Checking a long list meant manually copying and pasting every single book title—over and over again.
+
+What it does
+This tool automates that tedious workflow:
+
+Paste your list: Drop multiple book titles into the tool at once.
+
+Select your branch: Pick the specific Taoyuan library branch you are visiting.
+
+Get results: The crawler checks the catalog automatically and reports which books are available to borrow right now.
+
+痛點：
+平常習慣把想看的書列成清單。每次前往桃園市立圖書館的特定分館（如大園、大竹、中壢、中路、龜山等等）時，想知道現場有哪些書可借。但官方查詢系統一次只能查一本書，清單較長時需要逐一手動複製貼上，非常耗時。
+
+解決方案：
+這是一個專為桃園市立圖書館設計的批次查詢爬蟲工具（使用 Google Antigravity 開發）。
+只要一次貼上整份書名清單，並選擇欲查詢的分館，程式便會自動批次爬取館藏狀態，快速列出該館目前「可直接外借」的書籍。
 
 使用者只需貼上或匯入書單，系統將自動於背景透過 Playwright 進行深度檢索，即時展開所有分館藏書與在館狀態，並透過現代化 Web 儀表板直觀呈現**「在館可借」**、**「已外借」**與**「他館有書」**。
 
