@@ -58,7 +58,7 @@ Get results: The crawler checks the catalog automatically and reports which book
 
 ## 📱 iPhone 隨身查書版 (Scriptable 專用版)
 
-除了電腦版外，本專案亦提供 **純 iPhone 本機執行** 的獨立腳本（[`taoyuan_library_ios_v3.2.js`](taoyuan_library_ios_v3.2.js)）。
+除了電腦版外，本專案亦提供 **純 iPhone 本機執行** 的獨立腳本（[`taoyuan_library_ios_v3.3.js`](taoyuan_library_ios_v3.3.js)）。
 無須架設任何伺服器或中繼 Proxy，手機打開即可直接與桃園市立圖書館官方 GraphQL API 高速直連查書！
 
 ### 🌟 特色功能
@@ -75,7 +75,7 @@ Get results: The crawler checks the catalog automatically and reports which book
 ### 📲 執行步驟
 1. **安裝 Scriptable**：至 App Store 免費下載安裝 [Scriptable](https://apps.apple.com/app/scriptable/id1405459188) App。
 2. **匯入腳本**：
-   * 將專案中的 [`taoyuan_library_ios_v3.2.js`](taoyuan_library_ios_v3.2.js) 檔案複製到 iPhone 的 **`iCloud 雲碟 / Scriptable`** 資料夾中。
+   * 將專案中的 [`taoyuan_library_ios_v3.3.js`](taoyuan_library_ios_v3.3.js) 檔案複製到 iPhone 的 **`iCloud 雲碟 / Scriptable`** 資料夾中。
    * （或在 Scriptable App 中新建腳本，將檔案內容直接貼上）。
 3. **執行查書**：
    * 打開 Scriptable 點擊 `taoyuan_library_ios_v3.2` 即可直接執行。
@@ -107,7 +107,7 @@ python server.py
 ## 📁 專案架構
 
 ```plaintext
-├── taoyuan_library_ios_v3.2.js # iPhone Scriptable 專用查書腳本 (官方 GraphQL 直連)
+├── taoyuan_library_ios_v3.3.js # iPhone Scriptable 專用查書腳本 (官方 GraphQL 直連)
 ├── crawler.py                  # Python 爬蟲核心引擎 (官方 GraphQL API 批次查詢)
 ├── server.py                   # FastAPI 後端（提供 REST API 與 SSE 即時進度推播）
 ├── default_books.txt           # 預設測試書單（精選 61 本經典閱讀清單）
