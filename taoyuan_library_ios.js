@@ -758,8 +758,14 @@ async function run() {
                 }
               }
             }
-            // 輕量保護間隔
-            await new Promise(r => setTimeout(r, 100));
+            // 輕量保護間隔 (使用 Scriptable 原生 Timer)
+            await new Promise(resolve => {
+              try {
+                Timer.schedule(100, false, resolve);
+              } catch (e) {
+                resolve();
+              }
+            });
           }
 
           // 完成通知與震動
