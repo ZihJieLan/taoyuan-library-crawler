@@ -1,9 +1,12 @@
 import re
 import time
 import urllib.parse
+import urllib.request
+import ssl
+import json
 import difflib
+import http.cookiejar
 from typing import List, Dict, Any, Optional, Callable
-from playwright.sync_api import sync_playwright, Browser, Page
 
 def normalize_title_for_match(t: str) -> str:
     """清理書名以進行防抓錯之精確相似度比對。"""
@@ -53,11 +56,6 @@ def clean_title_candidates(raw_title: str) -> List[str]:
     candidates = []
     
     # 1. 第一步：清理書名尾隨的頁碼與阿拉伯數字
-    # 支援格式：
-    # - "精準回饋 88" -> "精準回饋"
-    # - "原子習慣 p.120" / "原子習慣 P120" -> "原子習慣"
-    # - "被討厭的勇氣-150" / "被討厭的勇氣——150" -> "被討厭的勇氣"
-    # - "投資金律 50頁" -> "投資金律"
     cleaned_no_page = re.sub(
         r'[\s\-_—,，:：]*([pP]\.?\s*\d+|\d+\s*[頁页]|\b\d{1,4}\b)\s*$', 
         '', 
@@ -76,29 +74,23 @@ def clean_title_candidates(raw_title: str) -> List[str]:
         if no_year and no_year not in candidates:
             candidates.append(no_year)
             
-    # 3. 第三步：標點符號正規化（安全不切碎原則：將逗號/分號/頓號替換為空格或去除，保留完整語意長度）
+    # 3. 第三步：標點符號正規化
     for base in list(candidates):
         if re.search(r'[，,；;！!、]', base):
-            # 版本 A: 標點替換為單一空格（支援多詞/AND 檢索）
             space_ver = re.sub(r'[，,；;！!、]+', ' ', base).strip()
             space_ver = re.sub(r'\s+', ' ', space_ver)
             if space_ver and space_ver not in candidates:
                 candidates.append(space_ver)
             
-            # 版本 B: 直接移除標點符號
             clean_ver = re.sub(r'[，,；;！!、\s]+', '', base).strip()
             if clean_ver and clean_ver not in candidates:
                 candidates.append(clean_ver)
 
     # 4. 第四步：副標題切除（冒號、破折號、問號之後的說明）
-    # 例：沒了名片, 你還剩下什麼? : 32個上班族增加自我籌碼的方法 -> 沒了名片, 你還剩下什麼
-    # 例：商業思維-游舒帆 -> 商業思維
-    # 例：悉達多：一首印度的詩》（流浪者之歌） -> 悉達多
     for base in list(candidates):
         for sep in [':', '：', ' - ', '-', '——', '—', '? ', '？']:
             if sep in base:
                 main_part = base.split(sep)[0].strip()
-                # 去除開頭與結尾之成對括號
                 main_part = re.sub(r'^[《〈(（\[【]+|[》〉)）\]】]+$', '', main_part).strip()
                 if main_part and len(main_part) >= 2 and main_part not in candidates:
                     candidates.append(main_part)
@@ -107,7 +99,6 @@ def clean_title_candidates(raw_title: str) -> List[str]:
     bracket_match = re.search(r'[\(（《〈](.+?)[\)）》〉]', raw)
     if bracket_match:
         inner = bracket_match.group(1).strip()
-        # 排除純數字年份的括號內容
         if len(inner) >= 2 and not inner.isdigit() and inner not in candidates:
             candidates.append(inner)
 
@@ -119,166 +110,261 @@ def clean_title_candidates(raw_title: str) -> List[str]:
     return candidates
 
 class LibraryCrawler:
+    """基於官方 GraphQL API 的高效能圖書館檢索器（擺脫無頭瀏覽器與逾時問題）。"""
+    
+    GRAPHQL_URL = "https://webpac.typl.gov.tw/api/HyLibWS/graphql"
+    BASE_URL = "https://webpac.typl.gov.tw/"
+    
     def __init__(self, headless: bool = True):
         self.headless = headless
-        self.playwright = None
-        self.browser: Optional[Browser] = None
-        self.page: Optional[Page] = None
         self.is_stopped = False
+        self.csrf_token = ""
+        self.opener = None
+        self.ssl_ctx = ssl.create_default_context()
+        self.ssl_ctx.check_hostname = False
+        self.ssl_ctx.verify_mode = ssl.CERT_NONE
+        self._init_session()
 
-    def start_browser(self):
-        """啟動本機 Chrome 或 Edge 瀏覽器。"""
-        self.playwright = sync_playwright().start()
-        try:
-            self.browser = self.playwright.chromium.launch(channel="chrome", headless=self.headless)
-        except Exception:
-            try:
-                self.browser = self.playwright.chromium.launch(channel="msedge", headless=self.headless)
-            except Exception:
-                self.browser = self.playwright.chromium.launch(headless=self.headless)
-        
-        context = self.browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    def _init_session(self):
+        """建立帶有 CookieJar 與自訂 SSL 驗證的 HTTP Opener。"""
+        self.cookie_jar = http.cookiejar.CookieJar()
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self.cookie_jar),
+            urllib.request.HTTPSHandler(context=self.ssl_ctx)
         )
-        self.page = context.new_page()
 
-    def stop(self):
-        """停止爬蟲。"""
-        self.is_stopped = True
-        self.close_browser()
-
-    def close_browser(self):
-        """關閉瀏覽器與 Playwright。"""
+    def _ensure_csrf(self):
+        """確保已獲取有效的 CSRF Token 與 Session Cookie。"""
+        if self.csrf_token:
+            return
+            
         try:
-            if self.page:
-                self.page.close()
-            if self.browser:
-                self.browser.close()
-            if self.playwright:
-                self.playwright.stop()
+            req = urllib.request.Request(
+                self.BASE_URL,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                }
+            )
+            res = self.opener.open(req, timeout=12)
+            html = res.read().decode("utf-8")
+            m = re.search(r'"csrfToken":"([^"]+)"', html)
+            if m:
+                self.csrf_token = m.group(1)
         except Exception:
             pass
-        finally:
-            self.page = None
-            self.browser = None
-            self.playwright = None
+
+    def start_browser(self):
+        """相容原先介面，初始化連線並抓取 Token。"""
+        self.is_stopped = False
+        self._ensure_csrf()
+
+    def stop(self):
+        """停止檢索。"""
+        self.is_stopped = True
+
+    def close_browser(self):
+        """相容原先介面，釋放資源。"""
+        pass
 
     def search_book(self, raw_title: str) -> Optional[Dict[str, Any]]:
-        """在 WebPAC 上檢索書籍，比對標題相似度並回傳最相符的書目資訊。"""
+        """透過 GraphQL API 檢索書籍，比對標題相似度並回傳最相符的書目資訊。"""
+        self._ensure_csrf()
         candidates = clean_title_candidates(raw_title)
         
+        search_query = """
+        query search($searchForm: SearchForm) {
+          search(Input: $searchForm) {
+            list {
+              values {
+                ref {
+                  key
+                  value
+                }
+              }
+            }
+            info {
+              total
+            }
+          }
+        }
+        """
+
         for cand in candidates:
             if self.is_stopped:
                 return None
-                
+
             encoded = urllib.parse.quote(cand)
-            search_url = f"https://webpac.typl.gov.tw/search?searchInput={encoded}&searchField=FullText"
-            
+            search_payload = {
+                "operationName": "search",
+                "query": search_query,
+                "variables": {
+                    "searchForm": {
+                        "searchField": ["FullText"],
+                        "searchInput": [cand],
+                        "op": [],
+                        "keepsite": [],
+                        "cln": [],
+                        "queryString": f"searchField=FullText&searchInput={encoded}"
+                    }
+                }
+            }
+
             try:
-                self.page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
-                try:
-                    self.page.wait_for_selector(
-                        "a[id^='seq_'], .seq a, a[href*='bookDetail'], .no_result", 
-                        timeout=5000
-                    )
-                except Exception:
-                    pass
-                
-                # 尋找所有候選結果連結（檢查前 5 筆）
-                link_elements = self.page.query_selector_all(
-                    "a[id^='seq_'], .seq a, a[href*='bookDetail']"
+                req = urllib.request.Request(
+                    self.GRAPHQL_URL,
+                    data=json.dumps(search_payload).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Referer": "https://webpac.typl.gov.tw/search",
+                        "x-csrf-token": self.csrf_token or ""
+                    }
                 )
+                res = self.opener.open(req, timeout=12)
+                res_data = json.loads(res.read().decode("utf-8"))
                 
-                for link_el in link_elements[:5]:
-                    found_title = link_el.inner_text().strip()
-                    if not found_title:
+                s_values = res_data.get("data", {}).get("search", {}).get("list", {}).get("values", [])
+                
+                for item in s_values[:5]:
+                    ref_dict = {kv["key"]: kv["value"] for kv in item.get("ref", [])}
+                    found_title = ref_dict.get("title", "").strip()
+                    sid = ref_dict.get("sid", "")
+                    
+                    if not found_title or not sid:
                         continue
                         
                     # 標題相似度校驗：嚴格防範抓錯書（False Positive）
                     if not is_title_match(raw_title, found_title, cand):
                         continue
                         
-                    href = link_el.get_attribute("href") or ""
-                    if href.startswith("http"):
-                        detail_url = href
-                    elif href.startswith("/"):
-                        detail_url = f"https://webpac.typl.gov.tw{href}"
-                    else:
-                        detail_url = f"https://webpac.typl.gov.tw/{href}"
-                        
+                    detail_url = f"https://webpac.typl.gov.tw/bookDetail/{sid}"
                     return {
                         "searched_query": cand,
                         "found_title": found_title,
-                        "detail_url": detail_url
+                        "detail_url": detail_url,
+                        "marc_id": sid,
+                        "author": ref_dict.get("author", ""),
+                        "isbn": ref_dict.get("isbn", "")
                     }
             except Exception:
                 continue
-                
+
         return None
 
-    def get_book_holdings(self, detail_url: str, target_branch: str = "中壢分館") -> Dict[str, Any]:
-        """進入書籍詳細頁面，展開所有館藏並分析目標分館狀態。"""
-        try:
-            self.page.goto(detail_url, wait_until="domcontentloaded", timeout=25000)
-            
-            try:
-                self.page.wait_for_selector(".bookplace_list tbody tr, table tr:has(td[data-title])", timeout=6000)
-            except Exception:
-                pass
-            
-            clicks = 0
-            while clicks < 12 and not self.is_stopped:
-                more_btn = self.page.query_selector("a.btnstyle.bluebg3.morewidth, a:has-text('載入更多')")
-                if not more_btn or not more_btn.is_visible():
-                    break
-                try:
-                    more_btn.click()
-                    time.sleep(0.6)
-                    clicks += 1
-                except Exception:
-                    break
+    def get_book_holdings(self, detail_url_or_id: str, target_branch: str = "中壢分館") -> Dict[str, Any]:
+        """透過 GraphQL API 查詢館藏狀態與目標分館在館資訊。"""
+        self._ensure_csrf()
+        
+        # 提取 marcId
+        marc_id = ""
+        if isinstance(detail_url_or_id, int):
+            marc_id = str(detail_url_or_id)
+        else:
+            m = re.search(r'bookDetail/(\d+)', str(detail_url_or_id))
+            if m:
+                marc_id = m.group(1)
+            elif str(detail_url_or_id).isdigit():
+                marc_id = str(detail_url_or_id)
 
-            rows = self.page.query_selector_all(".bookplace_list tbody tr, table tr:has(td[data-title])")
+        if not marc_id:
+            return {
+                "classification": "NO_HOLDINGS",
+                "total_holdings_count": 0,
+                "target_holdings": [],
+                "other_branches": [],
+                "all_holdings": []
+            }
+
+        holdings_query = """
+        query getHoldByKeepSite($HoldForm: HoldForm) {
+          getHoldByKeepSite(Input: $HoldForm) {
+            list {
+              values {
+                ref {
+                  key
+                  value
+                }
+              }
+            }
+            info {
+              total
+              count
+            }
+          }
+        }
+        """
+
+        payload = {
+            "operationName": "getHoldByKeepSite",
+            "query": holdings_query,
+            "variables": {
+                "HoldForm": {
+                    "marcId": int(marc_id),
+                    "pageNo": 1,
+                    "limit": 100,
+                    "sort": "",
+                    "order": "",
+                    "keepSiteId": 0,
+                    "canShowHoldLendAndRead": 0,
+                    "keepSiteIdList": "",
+                    "holdVolumnDesc": ""
+                }
+            }
+        }
+
+        try:
+            req = urllib.request.Request(
+                self.GRAPHQL_URL,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer": f"https://webpac.typl.gov.tw/bookDetail/{marc_id}",
+                    "x-csrf-token": self.csrf_token or ""
+                }
+            )
+            res = self.opener.open(req, timeout=12)
+            data = json.loads(res.read().decode("utf-8"))
+            
+            hold_data = data.get("data", {}).get("getHoldByKeepSite", {})
+            values = hold_data.get("list", {}).get("values", [])
             
             all_holdings = []
             target_holdings = []
             other_branches = set()
-            
-            for row in rows:
-                cols = row.query_selector_all("td")
-                if not cols:
-                    continue
-                    
-                loc_td = row.query_selector('td[data-title*="館藏地"]')
-                usage_td = row.query_selector('td[data-title*="用途"]')
-                call_td = row.query_selector('td[data-title*="索書號"]')
-                status_td = row.query_selector('td[data-title*="狀態"]')
-                barcode_td = row.query_selector('td[data-title*="條碼號"]')
+
+            clean_target = target_branch.replace("分館", "").strip()
+
+            for item in values:
+                ref = {kv["key"]: kv["value"] for kv in item.get("ref", [])}
+                branch_name = ref.get("keepSiteLabelName", "").strip()
+                room_name = ref.get("keepRoomLabelName", "").strip()
+                call_number = ref.get("callNumber", "").strip()
+                status_text = ref.get("bookStatusLabelName", "").strip()
+                barcode = ref.get("barcode", "").strip()
+                usage = ref.get("purposeName", "").strip()
+
+                loc_text = f"{branch_name}/{room_name}" if room_name else branch_name
                 
-                loc_text = loc_td.inner_text().strip() if loc_td else (cols[1].inner_text().strip() if len(cols) > 1 else "")
-                usage_text = usage_td.inner_text().strip() if usage_td else (cols[2].inner_text().strip() if len(cols) > 2 else "")
-                call_text = call_td.inner_text().strip() if call_td else (cols[3].inner_text().strip() if len(cols) > 3 else "")
-                status_text = status_td.inner_text().strip() if status_td else (cols[4].inner_text().strip() if len(cols) > 4 else "")
-                barcode_text = barcode_td.inner_text().strip() if barcode_td else (cols[5].inner_text().strip() if len(cols) > 5 else "")
-                
-                branch_name = loc_text.split('/')[0].strip() if '/' in loc_text else loc_text.strip()
-                
-                is_available = ("在館" in status_text or "可借" in status_text) and ("外借" not in status_text and "借出" not in status_text and "預約" not in status_text)
-                
+                # 判定是否在館可借（排除外借、借出、預約、通閱、移送中等）
+                is_available = ("在館" in status_text or "可借" in status_text) and not any(
+                    x in status_text for x in ["外借", "借出", "預約", "移送", "通閱", "遺失", "破損"]
+                )
+
                 item_data = {
                     "location": loc_text,
                     "branch": branch_name,
-                    "usage": usage_text,
-                    "call_number": call_text,
+                    "usage": usage,
+                    "call_number": call_number,
                     "status": status_text,
-                    "barcode": barcode_text,
+                    "barcode": barcode,
                     "is_available": is_available
                 }
-                
+
                 all_holdings.append(item_data)
-                
-                clean_target = target_branch.replace("分館", "").strip()
-                if clean_target in loc_text or clean_target in branch_name:
+
+                if clean_target in branch_name or clean_target in loc_text:
                     target_holdings.append(item_data)
                 else:
                     if branch_name:
@@ -319,8 +405,9 @@ class LibraryCrawler:
         target_branch: str = "中壢分館",
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None
     ) -> List[Dict[str, Any]]:
+        """批次處理書單，即時回傳進度。"""
         self.is_stopped = False
-        self.start_browser()
+        self._ensure_csrf()
         
         results = []
         total = len(book_list)
@@ -360,6 +447,7 @@ class LibraryCrawler:
                 else:
                     detail_url = search_res["detail_url"]
                     found_title = search_res["found_title"]
+                    marc_id = search_res["marc_id"]
                     
                     if on_progress:
                         on_progress({
@@ -372,7 +460,7 @@ class LibraryCrawler:
                             "message": f"找到「{found_title}」，正在檢查【{target_branch}】館藏狀態..."
                         })
                         
-                    holdings_info = self.get_book_holdings(detail_url, target_branch=target_branch)
+                    holdings_info = self.get_book_holdings(marc_id, target_branch=target_branch)
                     
                     classification = holdings_info["classification"]
                     target_items = holdings_info["target_holdings"]
@@ -415,7 +503,8 @@ class LibraryCrawler:
                         "message": f"[{idx}/{total}] {title}：{book_result['summary']}"
                     })
                     
-                time.sleep(0.6)
+                # 輕量間隔，保護圖書館伺服器
+                time.sleep(0.2)
         finally:
             self.close_browser()
             
