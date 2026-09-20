@@ -56,7 +56,37 @@ Get results: The crawler checks the catalog automatically and reports which book
 
 ---
 
-## 🚀 快速啟動
+## 📱 iPhone 隨身查書版 (Scriptable 專用版)
+
+除了電腦版外，本專案亦提供 **純 iPhone 本機執行** 的獨立腳本（[`taoyuan_library_ios_v3.2.js`](taoyuan_library_ios_v3.2.js)）。
+無須架設任何伺服器或中繼 Proxy，手機打開即可直接與桃園市立圖書館官方 GraphQL API 高速直連查書！
+
+### 🌟 特色功能
+* **純 iPhone 本機執行**：利用免費的 iOS App [Scriptable](https://apps.apple.com/app/scriptable/id1405459188) 驅動，零伺服器成本、無隱私疑慮。
+* **官方 GraphQL API 直連**：毫秒級高速批次查詢，不受圖書館網頁前端版型改動影響。
+* **現代化手機 UI**：支援 iOS 深色模式、即時查詢進度條、五大分類分頁（🌟 在館可借、⏳ 已外借、📍 他館有書、❓ 查無此書、📚 全部書目）。
+* **智慧書單清洗**：
+  * 自動過濾清單標題（如「閱讀書目」）。
+  * 支援待讀與已讀標記（遇到 `[x]` 自動截斷後續已讀書目，自動移除 `[ ] ` 前綴）。
+  * 支援空白行自動分界截斷。
+* **一鍵操作**：內建「📋 貼上剪貼簿」與「📋 一鍵複製當前清單」按鈕，手機操作流暢省時。
+* **支援桌面捷徑**：可透過 iOS「捷徑」將腳本放置於 iPhone 桌面，點擊即查。
+
+### 📲 執行步驟
+1. **安裝 Scriptable**：至 App Store 免費下載安裝 [Scriptable](https://apps.apple.com/app/scriptable/id1405459188) App。
+2. **匯入腳本**：
+   * 將專案中的 [`taoyuan_library_ios_v3.2.js`](taoyuan_library_ios_v3.2.js) 檔案複製到 iPhone 的 **`iCloud 雲碟 / Scriptable`** 資料夾中。
+   * （或在 Scriptable App 中新建腳本，將檔案內容直接貼上）。
+3. **執行查書**：
+   * 打開 Scriptable 點擊 `taoyuan_library_ios_v3.2` 即可直接執行。
+   * **（可選）加到 iPhone 桌面**：
+     * 打開 iOS「捷徑」App $\rightarrow$ 新增捷徑 $\rightarrow$ 加入動作「**打開 URL**」（Open URL）。
+     * 網址輸入：`scriptable:///run?scriptName=taoyuan_library_ios_v3.2`
+     * 點選「加入主畫面」，日後即可在桌面點擊一鍵開啟！
+
+---
+
+## 💻 Windows 電腦版快速啟動
 
 ### 方式一：Windows 一鍵啟動（推薦）
 直接在專案根目錄雙擊：
@@ -67,10 +97,7 @@ Get results: The crawler checks the catalog automatically and reports which book
 # 1. 安裝相依套件
 pip install -r requirements.txt
 
-# 2. 安裝瀏覽器核心
-playwright install chromium
-
-# 3. 啟動伺服器
+# 2. 啟動伺服器
 python server.py
 ```
 啟動後打開瀏覽器訪問：`http://localhost:8765`
@@ -80,18 +107,17 @@ python server.py
 ## 📁 專案架構
 
 ```plaintext
-├── crawler.py           # Playwright 爬蟲核心引擎（含標點正規化與相似度校驗）
-├── server.py            # FastAPI 後端（提供 REST API 與 SSE 即時進度推播）
-├── default_books.txt    # 預設測試書單（精選 61 本經典閱讀清單）
-├── requirements.txt     # Python 相依套件清單
-├── 啟動圖書館查書系統.bat # Windows 一鍵啟動批次檔
-├── static/              # 前端 Web 介面資源
-│   ├── index.html       # 現代化儀表板頁面
-│   ├── style.css        # 玻璃擬態暗色 UI 樣式
-│   └── app.js           # 前端互動邏輯、SSE 串流同步與智慧分頁
-└── tests/               # 單元測試與回歸測試套件
-    ├── test_regression_0919B.py    # 書名清理與分館比對回歸測試
-    └── test_title_verification.py  # 標點正規化與防誤判測試
+├── taoyuan_library_ios_v3.2.js # iPhone Scriptable 專用查書腳本 (官方 GraphQL 直連)
+├── crawler.py                  # Python 爬蟲核心引擎 (官方 GraphQL API 批次查詢)
+├── server.py                   # FastAPI 後端（提供 REST API 與 SSE 即時進度推播）
+├── default_books.txt           # 預設測試書單（精選 61 本經典閱讀清單）
+├── requirements.txt            # Python 相依套件清單
+├── 啟動圖書館查書系統.bat        # Windows 一鍵啟動批次檔
+├── static/                     # 前端 Web 介面資源
+│   ├── index.html              # 現代化儀表板頁面
+│   ├── style.css               # 玻璃擬態暗色 UI 樣式
+│   └── app.js                  # 前端互動邏輯、SSE 串流同步與智慧分頁
+└── tests/                      # 單元測試與回歸測試套件
 ```
 
 ---
