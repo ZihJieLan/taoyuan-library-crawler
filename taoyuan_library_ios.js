@@ -612,7 +612,7 @@ function generateHTML() {
           <button type="button" class="btn-danger-sm" id="btnClear">一鍵清空</button>
         </div>
       </div>
-      <textarea id="bookListInput" placeholder="請在此貼上欲查詢書名清單...\n（貼上時會自動移除「閱讀書目」標題，並自動截斷「快思慢想」之後的已讀書目）"></textarea>
+      <textarea id="bookListInput" placeholder="請在此貼上欲查詢書名清單...\n（貼上時會自動略過「閱讀書目」標題；遇到第一個空白行時，會自動截斷後方已讀書目）"></textarea>
     </div>
 
     <button type="button" class="btn-primary" id="btnStart">開始查詢</button>
@@ -684,7 +684,7 @@ function generateHTML() {
       setTimeout(() => toast.classList.remove('show'), 2200);
     }
 
-    // 智慧書單清理過濾器
+    // 智慧書單清理過濾器：略過標題，遇到第一個空白行時自動截斷後方已讀書目
     function cleanBookInputText(text) {
       const lines = text.split('\\n');
       const cleaned = [];
@@ -692,14 +692,18 @@ function generateHTML() {
 
       for (const rawLine of lines) {
         const line = rawLine.trim();
-        if (!line) continue;
         // 1. 自動略過「閱讀書目」等標題
         if (line.includes('閱讀書目')) continue;
-        // 2. 遇到「快思慢想」即截斷（包含「快思慢想」後面的已讀書目全部不查）
-        if (line.includes('快思慢想')) {
-          truncated = true;
-          break;
+
+        // 2. 當已有書目時，遇到空白行自動切斷（空白行後面全視為已讀書目）
+        if (!line) {
+          if (cleaned.length > 0) {
+            truncated = true;
+            break;
+          }
+          continue;
         }
+
         cleaned.push(line);
       }
       return { cleaned, truncated };
@@ -710,7 +714,7 @@ function generateHTML() {
       const { cleaned, truncated } = cleanBookInputText(bookInput.value);
       if (truncated) {
         bookInput.value = cleaned.join('\\n');
-        showToast(\`已自動截斷已讀部分，保留 \${cleaned.length} 本未讀書目\`);
+        showToast(\`偵測到空白行分界，已自動截斷後方已讀書目（保留 \${cleaned.length} 本）\`);
       }
     });
 
