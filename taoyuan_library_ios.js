@@ -3,19 +3,17 @@
 // icon-color: teal; icon-glyph: book;
 
 /**
- * 桃園市立圖書館 - 在館書目智慧檢索 (iPhone Scriptable 專用版 v3.0)
+ * 桃園市立圖書館 - 在館書目智慧檢索 (iPhone Scriptable 專用版 v3.1)
  * 
- * 新增特色：
- * 1. 一鍵清空書單按鈕。
- * 2. 智慧剪貼簿自動清洗：貼上時自動移除「閱讀書目」標題，並自動截斷「快思慢想」之後的已讀書目。
- * 3. 完整 5 大分頁分類與統計切換：
- *    - 🌟 在館可借 (X) [第一順位]
- *    - ⏳ 已外借 (X)
- *    - 📍 他館有書 (X)
- *    - ❓ 查無此書 (X)
- *    - 📚 全部書目 (X) [最後順位]
- * 4. 支援各分頁一鍵複製整理後之書單。
- * 5. 採用官方 GraphQL API，無第三方伺服器，速度極快。
+ * v3.1 更新重點：
+ * 1. 【重大修復】修復 JavaScript 正則表達式 Unicode 陷阱：
+ *    原先前導的 [\s\W_]+ 在 JS 中會將所有中文字元視為 \W 誤殺抹除成空字串，
+ *    導致比對書名失敗並判定為「查無此書」。現已全面改用 Unicode 屬性 [^\p{L}\p{N}]+，
+ *    完整保留繁簡中文、英數字並支援跨語言書名。
+ * 2. 【比對增強】加入 LCS 序列相似度比對演算法（相似度 >= 0.65），完全同步 Python 端邏輯。
+ * 3. 【網路穩健】修復 iOS Request 空白 Cookie Header 覆蓋問題，確保 Session 正常維持。
+ * 4. 【版本標示】於介面頂端與標題明確標註版本號碼 v3.1，便於手機端即時辨識。
+ * 5. 【跨平台斷行】支援 \r\n 與 \n 自動識別，貼上書單遇到空白行時自動截斷後續已讀書目。
  */
 
 // 所有分館清單
@@ -84,8 +82,30 @@ function normalizeTitle(t) {
   return (t || '')
     .replace(/[\(（\[【].*?[\)）\]】]/g, '')
     .replace(/\b(hyread|ebook|電子書)\b/gi, '')
-    .replace(/[\s\W_]+/gu, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
     .toLowerCase();
+}
+
+// LCS 序列相似度比對（防張冠李戴，同步 Python 端 SequenceMatcher 效果）
+function similarityRatio(s1, s2) {
+  if (s1 === s2) return 1.0;
+  if (!s1 || !s2) return 0.0;
+  const l1 = s1.length;
+  const l2 = s2.length;
+  const dp = Array(l2 + 1).fill(0);
+  for (let i = 1; i <= l1; i++) {
+    let prev = 0;
+    for (let j = 1; j <= l2; j++) {
+      const temp = dp[j];
+      if (s1[i - 1] === s2[j - 1]) {
+        dp[j] = prev + 1;
+      } else {
+        dp[j] = Math.max(dp[j], dp[j - 1]);
+      }
+      prev = temp;
+    }
+  }
+  return (2.0 * dp[l2]) / (l1 + l2);
 }
 
 function isTitleMatch(rawTitle, foundTitle, queryCand) {
@@ -93,12 +113,14 @@ function isTitleMatch(rawTitle, foundTitle, queryCand) {
   const normFound = normalizeTitle(foundTitle);
   if (!normRaw || !normFound) return false;
   if (normRaw.includes(normFound) || normFound.includes(normRaw)) return true;
+  if (similarityRatio(normRaw, normFound) >= 0.65) return true;
 
   const cands = queryCand ? [queryCand] : cleanTitleCandidates(rawTitle);
   for (const c of cands) {
     const nc = normalizeTitle(c);
-    if (nc && nc.length >= 2 && (nc.includes(normFound) || normFound.includes(nc))) {
-      return true;
+    if (nc && nc.length >= 2) {
+      if (nc.includes(normFound) || normFound.includes(nc)) return true;
+      if (nc.length >= 3 && similarityRatio(nc, normFound) >= 0.65) return true;
     }
   }
   return false;
@@ -181,13 +203,16 @@ class TyLibClient {
         req.method = "POST";
         req.allowInsecureRequest = true;
         req.timeoutInterval = 10;
-        req.headers = {
+        const reqHeaders = {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
           "Referer": "https://webpac.typl.gov.tw/search",
-          "x-csrf-token": this.csrfToken || "",
-          "Cookie": this.cookieHeader || ""
+          "x-csrf-token": this.csrfToken || ""
         };
+        if (this.cookieHeader) {
+          reqHeaders["Cookie"] = this.cookieHeader;
+        }
+        req.headers = reqHeaders;
         req.body = JSON.stringify(payload);
         const res = await req.loadJSON();
         const values = res?.data?.search?.list?.values || [];
@@ -255,13 +280,16 @@ class TyLibClient {
       req.method = "POST";
       req.allowInsecureRequest = true;
       req.timeoutInterval = 10;
-      req.headers = {
+      const reqHeaders = {
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
         "Referer": `https://webpac.typl.gov.tw/bookDetail/${sid}`,
-        "x-csrf-token": this.csrfToken || "",
-        "Cookie": this.cookieHeader || ""
+        "x-csrf-token": this.csrfToken || ""
       };
+      if (this.cookieHeader) {
+        reqHeaders["Cookie"] = this.cookieHeader;
+      }
+      req.headers = reqHeaders;
       req.body = JSON.stringify(payload);
       const res = await req.loadJSON();
       const values = res?.data?.getHoldByKeepSite?.list?.values || [];
@@ -335,7 +363,7 @@ function generateHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>桃園圖書館在館書目查詢</title>
+<title>桃園圖書館在館書目查詢 v3.1</title>
 <style>
   :root {
     --bg-color: #f2f2f7;
@@ -594,8 +622,8 @@ function generateHTML() {
 </head>
 <body>
   <div class="header">
-    <h1>📚 桃園圖書館在館查書</h1>
-    <p>純 iPhone 本機執行 · 官方高速直連</p>
+    <h1>📚 桃園圖書館在館查書 v3.1</h1>
+    <p>純 iPhone 本機執行 · 官方高速直連 · v3.1</p>
   </div>
 
   <div class="card">
@@ -686,7 +714,7 @@ function generateHTML() {
 
     // 智慧書單清理過濾器：略過標題，遇到第一個空白行時自動截斷後方已讀書目
     function cleanBookInputText(text) {
-      const lines = text.split('\\n');
+      const lines = text.split(/\\r?\\n/);
       const cleaned = [];
       let truncated = false;
 
